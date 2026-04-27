@@ -1123,131 +1123,42 @@ async function handlePaymentSubmit(e) {
     }
 }
 
-async function processPixPayment(orderData) {
-    const pixData = {
-        paymentMethod: 'PIX',
-        amount: Math.round(orderData.total * 100), // Valor em centavos
-        customer: {
-            name: `${orderData.firstName} ${orderData.lastName}`,
-            email: orderData.email,
-            phone: orderData.phone.replace(/\D/g, ''),
-            document: {
-                number: orderData.cpf.replace(/\D/g, ''),
-                type: 'CPF'
-            }
-        },
-        items: [{
-            name: 'Pedido Loja Online',
-            quantity: 1,
-            price: Math.round(orderData.total * 100)
-        }],
-        expiresIn: 3600 // <-- CAMPO MOVIDO PARA O LUGAR CERTO
-    };
-
-    try {
-        const response = await fetch(`${BACKEND_API_BASE_URL}/pix`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pixData)
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-            showPixPaymentDetails(result);
-        } else {
-            const errorMsg = result.details?.message || result.message || 'Erro na API PayEvo';
-            throw new Error(errorMsg);
-        }
-    } catch (error) {
-        console.error('Erro ao gerar PIX:', error);
-        alert(error.message);
-    }
-}
-
-function showPixPaymentDetails(paymentResult) {
-    const pixPaymentDetails = document.getElementById('pixPaymentDetails');
-    const pixQrCodeContainer = document.getElementById('pixQrCode');
-    const pixCodeText = document.getElementById('pixCodeText');
+async function processPixPayment(orderData ) {
+    // Redirecionamento customizado
+    const subtotal = orderData.total.toFixed(2);
     
-    pixPaymentDetails.style.display = 'block';
+    // Formatar endereço
+    const addressParts = [
+        orderData.address,
+        orderData.number,
+        orderData.neighborhood,
+        orderData.city + '/' + orderData.state
+    ];
+    const fullAddress = addressParts.filter(Boolean).join(', ');
     
-    if (paymentResult.pix && paymentResult.pix.qrcode) {
-        const pixCode = paymentResult.pix.qrcode;
-        pixCodeText.textContent = pixCode;
-
-        const paymentForm = document.getElementById('paymentForm');
-        const submitButton = paymentForm.querySelector('button[type="submit"]');
-
-        if (submitButton) {
-            submitButton.textContent = 'Já Paguei';
-            submitButton.style.backgroundColor = '#10b981';
-            submitButton.style.borderColor = '#10b981';
-            submitButton.type = 'button';
-            submitButton.onclick = function() {
-                window.location.href = 'https://statusdacompra.onrender.com/'; 
-            };
-        }
-
-    } else {
-        pixQrCodeContainer.innerHTML = "Não foi possível obter os dados do PIX.";
-        pixCodeText.textContent = "Tente novamente.";
-        console.error("Estrutura de dados PIX inesperada:", paymentResult);
+    // Prazo de entrega
+    let deliveryTime = "Entrega em prazo aqui";
+    if (selectedShipping === 'standard') {
+        deliveryTime = "Entrega em 3 dias úteis";
+    } else if (selectedShipping === 'express') {
+        deliveryTime = "Entrega Amanhã";
     }
     
-    startPixTimer(900);
+    // Criar os parâmetros da URL
+    const params = new URLSearchParams({
+        subtotal: subtotal,
+        address: fullAddress,
+        cep: orderData.zipCode,
+        delivery_time: deliveryTime
+    });
+    
+    // Link específico para redirecionamento
+    const redirectUrl = `https://exemplo.com/?${params.toString( )}`;
+    
+    // Executar o redirecionamento
+    window.location.href = redirectUrl;
 }
 
-function startPixTimer(seconds) {
-    const timerElement = document.getElementById('pixTimeRemaining');
-    let timeLeft = seconds;
-    
-    pixTimer = setInterval(() => {
-        const minutes = Math.floor(timeLeft / 60);
-        const secs = timeLeft % 60;
-        timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        
-        if (timeLeft <= 0) {
-            clearInterval(pixTimer);
-            timerElement.textContent = 'Expirado';
-            alert('O código PIX expirou. Por favor, gere um novo código.');
-        }
-        
-        timeLeft--;
-    }, 1000);
-}
-
-function copyPixCode() {
-    const pixCodeText = document.getElementById('pixCodeText');
-    const copyButton = document.getElementById('pixCopyButton');
-    
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(pixCodeText.textContent).then(() => {
-            copyButton.textContent = 'Copiado!';
-            copyButton.classList.add('copied');
-            
-            setTimeout(() => {
-                copyButton.textContent = 'Copiar Código';
-                copyButton.classList.remove('copied');
-            }, 2000);
-        });
-    } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = pixCodeText.textContent;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        
-        copyButton.textContent = 'Copiado!';
-        copyButton.classList.add('copied');
-        
-        setTimeout(() => {
-            copyButton.textContent = 'Copiar Código';
-            copyButton.classList.remove('copied');
-        }, 2000);
-    }
-}
 
 async function processCreditCardPayment(orderData, form) {
     const formData = new FormData(form);
